@@ -1,0 +1,181 @@
+name: Multi-Platform Release
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build-linux:
+    name: Build Linux
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install System Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-tk binutils
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build Binary with PyInstaller
+        run: |
+          pyinstaller --noconfirm --onefile --windowed --collect-all customtkinter --name "ExcelSplitterPro-Linux" main.py
+
+      - name: Create AppImage
+        run: |
+          wget https://github.com/AppImage/AppImageKit/releases/download/13/appimagetool-x86_64.AppImage
+          chmod +x appimagetool-x86_64.AppImage
+          
+          mkdir -p AppDir/usr/bin
+          cp dist/ExcelSplitterPro-Linux AppDir/usr/bin/
+          
+          # Copiar ícone
+          cp logo.png AppDir/excel_splitter.png
+          
+          echo "[Desktop Entry]" > AppDir/ExcelSplitterPro.desktop
+          echo "Name=ExcelSplitterPro" >> AppDir/ExcelSplitterPro.desktop
+          echo "Exec=ExcelSplitterPro-Linux" >> AppDir/ExcelSplitterPro.desktop
+          echo "Icon=excel_splitter" >> AppDir/ExcelSplitterPro.desktop
+          echo "Type=Application" >> AppDir/ExcelSplitterPro.desktop
+          echo "Categories=Utility;" >> AppDir/ExcelSplitterPro.desktop
+          
+          # Gerando o AppImage
+          ARCH=x86_64 ./appimagetool-x86_64.AppImage AppDir dist/ExcelSplitterPro-x86_64.AppImage
+
+      - name: Create .deb package
+        run: |
+          mkdir -p deb-pkg/usr/bin
+          mkdir -p deb-pkg/usr/share/icons/hicolor/512x512/apps/
+          mkdir -p deb-pkg/usr/share/applications/
+          
+          cp dist/ExcelSplitterPro-Linux deb-pkg/usr/bin/
+          cp logo.png deb-pkg/usr/share/icons/hicolor/512x512/apps/excel_splitter.png
+          
+          # Criar arquivo .desktop para o sistema
+          echo "[Desktop Entry]" > deb-pkg/usr/share/applications/excel-splitter.desktop
+          echo "Name=Excel Splitter Pro" >> deb-pkg/usr/share/applications/excel-splitter.desktop
+          echo "Exec=/usr/bin/ExcelSplitterPro-Linux" >> deb-pkg/usr/share/applications/excel-splitter.desktop
+          echo "Icon=excel_splitter" >> deb-pkg/usr/share/applications/excel-splitter.desktop
+          echo "Type=Application" >> deb-pkg/usr/share/applications/excel-splitter.desktop
+          echo "Categories=Utility;" >> deb-pkg/usr/share/applications/excel-splitter.desktop
+          
+          mkdir -p deb-pkg/DEBIAN
+          echo "Package: excelsplitterpro" > deb-pkg/DEBIAN/control
+          echo "Version: 1.0.0" >> deb-pkg/DEBIAN/control
+          echo "Architecture: amd64" >> deb-pkg/DEBIAN/control
+          echo "Maintainer: Developer" >> deb-pkg/DEBIAN/control
+          echo "Description: Ferramenta profissional para divisão de arquivos Excel." >> deb-pkg/DEBIAN/control
+          dpkg-deb --build deb-pkg dist/ExcelSplitterPro.deb
+
+      - name: Upload Linux Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ExcelSplitterPro-Linux
+          path: |
+            dist/ExcelSplitterPro-x86_64.AppImage
+            dist/ExcelSplitterPro.deb
+            dist/ExcelSplitterPro-Linux
+
+  build-macos:
+    name: Build MacOS
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build MacOS App Bundle
+        run: |
+          pyinstaller --noconfirm --onefile --windowed --argv-emulation --collect-all customtkinter --name "ExcelSplitterPro" main.py
+
+      - name: Compress App for download
+        run: |
+          cd dist
+          zip -r ExcelSplitterPro-MacOS.zip ExcelSplitterPro.app
+
+      - name: Upload MacOS Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ExcelSplitterPro-MacOS
+          path: dist/ExcelSplitterPro-MacOS.zip
+
+  build-windows:
+    name: Build Windows
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build with PyInstaller
+        run: |
+          pyinstaller --noconfirm --onefile --windowed --collect-all customtkinter --name "ExcelSplitterPro" main.py
+
+      - name: Upload Windows Executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: ExcelSplitterPro-Windows
+          path: dist/ExcelSplitterPro.exe
+
+  create-release:
+    name: Create Release
+    needs: [build-linux, build-macos, build-windows]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Display structure of downloaded artifacts
+        run: ls -R artifacts
+
+      - name: Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ github.run_number }}
+          name: Release v${{ github.run_number }}
+          draft: false
+          prerelease: false
+          files: |
+            artifacts/ExcelSplitterPro-Linux/ExcelSplitterPro-x86_64.AppImage
+            artifacts/ExcelSplitterPro-Linux/ExcelSplitterPro.deb
+            artifacts/ExcelSplitterPro-MacOS/ExcelSplitterPro-MacOS.zip
+            artifacts/ExcelSplitterPro-Windows/ExcelSplitterPro.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

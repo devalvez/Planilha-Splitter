@@ -1,0 +1,43 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environments
+.venv/
+venv/
+ENV/
+env/
+
+# Build and Dist
+build/
+dist/
+*.spec
+AppDir/
+deb-pkg/
+artifacts/
+
+# Testing / Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.coverage.*
+
+# IDEs
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+*.zip
+*.AppImage
+*.deb
+*.exe
+
+# Project specific
+*.log
+test_data/
+*.xlsx
+*.csv
+*.ods
